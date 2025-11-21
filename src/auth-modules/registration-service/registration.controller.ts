@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Headers, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Headers, HttpCode, HttpStatus, Post, UseGuards } from "@nestjs/common";
+import { RateLimitGuard } from "src/common/rate-limit.guard";
 import { IsEmail, IsNotEmpty, Length, Matches, MinLength } from "class-validator";
 import { RegistrationService } from "./regsitration.service";
 
@@ -30,6 +31,7 @@ export class RegistrationController {
     constructor(private readonly registrationService: RegistrationService) {}
 
     @Post('register')
+    @UseGuards(RateLimitGuard)
     @HttpCode(HttpStatus.CREATED)
     async registration(
         @Body() registerDto: RegisterDto,

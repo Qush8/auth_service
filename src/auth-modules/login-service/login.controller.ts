@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { IsEmail, IsNotEmpty, Min } from 'class-validator';
 import { LoginService } from './login.service';
+import { RateLimitGuard } from 'src/common/rate-limit.guard';
 
 export class LoginDto {
     @IsEmail()
@@ -21,6 +22,7 @@ export class LoginControllerController {
     constructor(private readonly loginService: LoginService) {}
    
     @Post('/login')
+    @UseGuards(RateLimitGuard)
     async login(@Body() body: LoginDto) {
         console.log('login request:', { email: body.email });
         return await this.loginService.login(body.email, body.password);
