@@ -174,38 +174,37 @@ export class  RegistrationService {
         if (!profileCreated) {
             // Per documentation: "do NOT delete auth record once created"
             // Instead, enqueue compensating job to retry until success
-            try {
-                await this.profileCreationQueue.add(
-                    'create-profile',
-                    {
-                        userId: savedUser.auth_id,
-                        username: savedUser.username,
-                        requestId: requestId,
-                        attemptNumber: 0,
-                    } as ProfileCreationJobData,
-                    {
-                        attempts: 10, // Maximum retry attempts
-                        backoff: {
-                            type: 'exponential',
-                            delay: 2000, // Initial delay 2 seconds
-                        },
-                    }
-                );
-
+            // Fire-and-forget: don't wait for queue operation to complete
+            this.profileCreationQueue.add(
+                'create-profile',
+                {
+                    userId: savedUser.auth_id,
+                    username: savedUser.username,
+                    requestId: requestId,
+                    attemptNumber: 0,
+                } as ProfileCreationJobData,
+                {
+                    attempts: 10, // Maximum retry attempts
+                    backoff: {
+                        type: 'exponential',
+                        delay: 2000, // Initial delay 2 seconds
+                    },
+                }
+            ).then(() => {
                 console.warn('user_registration_profile_creation_failed', { 
-                userId: savedUser.auth_id, 
-                email: savedUser.email,
-                    reason: 'User Service profile creation failed - enqueued compensating job'
-            });
-            } catch (queueError) {
-                // If queue is unavailable (e.g., Redis not running), log and continue
-                console.error('user_registration_profile_creation_failed_queue_error', { 
                     userId: savedUser.auth_id, 
                     email: savedUser.email,
+                    reason: 'User Service profile creation failed - enqueued compensating job'
+                });
+            }).catch((queueError) => {
+                // If queue is unavailable (e.g., Redis not running), log and continue
+                console.error('user_registration_profile_creation_failed_queue_error', { 
+                userId: savedUser.auth_id, 
+                email: savedUser.email,
                     reason: 'User Service profile creation failed - queue unavailable, manual retry required',
                     error: queueError instanceof Error ? queueError.message : String(queueError)
-                });
-            }
+            });
+            });
 
             // Continue with registration flow - profile will be created by compensating job
             // Per documentation: "enqueue compensating job to retry until success"
