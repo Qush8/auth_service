@@ -1,17 +1,35 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoginModule } from './auth-modules/login-service/login.module';
 import { RegistrationModule } from './auth-modules/registration-service/registration.module';
+import { AuthGrpcModule } from './auth-modules/auth-grpc/auth-grpc.module';
+import { RequestIdMiddleware } from './common/request-id.middleware';
+import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { BullModule } from '@nestjs/bull';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        redis: {
+          host: configService.get<string>('REDIS_HOST', 'localhost'),
+          port: configService.get<number>('REDIS_PORT', 6379),
+          password: configService.get<string>('REDIS_PASSWORD'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
+    PrometheusModule.register({
+      path: '/metrics',
     }),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
@@ -22,6 +40,7 @@ import { RegistrationModule } from './auth-modules/registration-service/registra
     }),
     LoginModule,
     RegistrationModule,
+    AuthGrpcModule,
     TypeOrmModule.forRoot({
       autoLoadEntities: true,
       type: 'postgres',
@@ -37,4 +56,8 @@ import { RegistrationModule } from './auth-modules/registration-service/registra
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

@@ -1,7 +1,9 @@
-import { BadRequestException, Body, Controller, Headers, HttpCode, HttpStatus, Post, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Headers, HttpCode, HttpStatus, Post, Req, UnauthorizedException, UseGuards } from "@nestjs/common";
 import { RateLimitGuard } from "src/common/rate-limit.guard";
 import { IsEmail, IsNotEmpty, Length, Matches, MinLength } from "class-validator";
 import { RegistrationService } from "./regsitration.service";
+import { CaptchaService } from "src/common/services/captcha.service";
+import type { RequestWithId } from "src/common/request-id.middleware";
 
 export class RegisterDto {
     @IsEmail()
@@ -28,7 +30,10 @@ export class RegisterDto {
 
 @Controller('api/auth')
 export class RegistrationController {
-    constructor(private readonly registrationService: RegistrationService) {}
+    constructor(
+        private readonly registrationService: RegistrationService,
+        private readonly captchaService: CaptchaService,
+    ) {}
 
     @Post('register')
     @UseGuards(RateLimitGuard)
@@ -36,12 +41,25 @@ export class RegistrationController {
     async registration(
         @Body() registerDto: RegisterDto,
         @Headers('idempotency-key') idempotencyKey?: string,
+        @Headers('x-captcha-token') captchaToken?: string,
+        @Req() req?: RequestWithId,
     ) {
         if (!idempotencyKey) {
             throw new BadRequestException('Idempotency-Key header is required');
         }
 
+        if (captchaToken) {
+             const isValid = await this.captchaService.verify(captchaToken);
+             if (!isValid) {
+                 throw new UnauthorizedException('Invalid Captcha');
+             }
+        }
+
         console.info('user_registration_attempt', { email: registerDto.email });
+
+        // Extract IP and User Agent from request
+        const ip = req?.ip || (req?.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req?.socket?.remoteAddress || 'unknown';
+        const userAgent = req?.headers['user-agent'] || 'unknown';
 
         const result = await this.registrationService.register(
             registerDto.email,
@@ -50,6 +68,9 @@ export class RegistrationController {
             registerDto.firstName,
             registerDto.lastName,
             idempotencyKey,
+            req?.requestId,
+            ip,
+            userAgent,
         );
 
         console.info('user_registered', { user_id: result.user.auth_id, email: result.user.email });

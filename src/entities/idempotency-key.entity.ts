@@ -20,6 +20,9 @@ export class IdempotencyKey {
 
   @Column({ type: 'timestamptz', name: 'created_at', default: () => 'NOW()' })
   createdAt: Date;
+
+  @Column({ type: 'timestamptz', name: 'expires_at', nullable: false })
+  expiresAt: Date;
 }
 
 

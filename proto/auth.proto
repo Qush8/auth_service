@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package reeltask.auth.v1;
+
+option go_package = "github.com/yourorg/yourrepo/gen/auth/v1;authv1";
+
+// Auth Service for internal microservices
+// Other services (User Service, Video Service, etc.) use this to verify tokens and get user info
+service AuthService {
+  // Verify JWT token (used by other services to authenticate requests)
+  rpc VerifyToken(VerifyTokenRequest) returns (VerifyTokenResponse);
+  
+  // Get user by ID (used by other services to get user information)
+  rpc GetUserById(GetUserByIdRequest) returns (GetUserByIdResponse);
+  
+  // Validate user exists and is active (used by other services for authorization)
+  rpc ValidateUser(ValidateUserRequest) returns (ValidateUserResponse);
+}
+
+// Request/Response messages
+message VerifyTokenRequest {
+  string token = 1; // JWT access token
+}
+
+message VerifyTokenResponse {
+  bool valid = 1; // Whether token is valid
+  UserInfo user = 2; // User information if valid
+  Error error = 3; // Error information if invalid
+}
+
+message GetUserByIdRequest {
+  string user_id = 1; // User auth_id (UUID)
+}
+
+message GetUserByIdResponse {
+  UserInfo user = 1; // User information
+  Error error = 2; // Error if user not found
+}
+
+message ValidateUserRequest {
+  string user_id = 1; // User auth_id (UUID)
+}
+
+message ValidateUserResponse {
+  bool valid = 1; // Whether user exists
+  bool is_active = 2; // Whether user is active
+  Error error = 3; // Error if user not found
+}
+
+// User information
+message UserInfo {
+  string user_id = 1; // auth_id (UUID)
+  string email = 2;
+  string username = 3;
+  bool is_active = 4;
+  bool email_verified = 5;
+}
+
+// Error message
+message Error {
+  string code = 1; // Error code (e.g., "INVALID_TOKEN", "NOT_FOUND", "UNAUTHORIZED")
+  string message = 2; // Error message
+}
+

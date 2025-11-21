@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package reeltask.user.v1;
+
+option go_package = "github.com/yourorg/yourrepo/gen/user/v1;userv1";
+
+// Common messages
+message UserProfile {
+  string id = 1;           // profile_id (UUID)
+  string user_id = 2;      // FK to auth.users.id
+  string username = 3;
+  string avatar_url = 4;   // optional
+  string bio = 5;          // optional
+  string created_at = 6;   // RFC3339
+}
+
+message Error {
+  string code = 1;         // e.g., "CONFLICT", "NOT_FOUND", "VALIDATION_ERROR"
+  string message = 2;
+}
+
+// Service definition
+service UserService {
+  // Internal: Auth -> User (idempotent; 409 treated as success by caller)
+  rpc CreateProfile(CreateProfileRequest) returns (CreateProfileResponse);
+}
+
+// Requests/Responses
+message CreateProfileRequest {
+  string user_id = 1;   // required
+  string username = 2;  // required
+  string request_id = 3; // propagate trace/correlation id
+}
+
+message CreateProfileResponse {
+  string profile_id = 1;
+  Error error = 2; // null when ok; code "CONFLICT" if already exists
+}
+

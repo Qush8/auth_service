@@ -16,8 +16,8 @@ export class JwtAuthService {
    * Generate access token (short-lived)
    */
   async generateAccessToken(payload: JwtPayload): Promise<string> {
+    // Relies on JwtModule configuration for secret/privateKey and algorithm (RS256)
     return this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_ACCESS_SECRET || 'your-super-secret-access-token-key-change-this-in-production',
       expiresIn: '15m',
       audience: process.env.JWT_AUDIENCE || 'reeltask',
     });
@@ -38,9 +38,8 @@ export class JwtAuthService {
    */
   async verifyAccessToken(token: string): Promise<JwtPayload> {
     try {
-      return await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: process.env.JWT_ACCESS_SECRET || 'your-super-secret-access-token-key-change-this-in-production',
-      });
+      // Relies on JwtModule configuration for secret/publicKey
+      return await this.jwtService.verifyAsync<JwtPayload>(token);
     } catch (error) {
       throw new Error('Invalid access token');
     }

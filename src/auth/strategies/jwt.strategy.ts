@@ -4,6 +4,9 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from 'src/entities/user.entity';
+import { ConfigService } from '@nestjs/config';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface JwtPayload {
   sub: string; // user auth_id
@@ -16,12 +19,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly configService: ConfigService,
   ) {
+    const publicKeyPath = configService.get<string>('JWT_PUBLIC_KEY_PATH') || path.join(process.cwd(), 'secrets/public.pem');
+    let secretOrKey: string;
+    let algorithms: string[] = ['HS256'];
+
+    if (fs.existsSync(publicKeyPath)) {
+        secretOrKey = fs.readFileSync(publicKeyPath, 'utf8');
+        algorithms = ['RS256'];
+    } else {
+        secretOrKey = configService.get<string>('JWT_ACCESS_SECRET') || 'your-super-secret-access-token-key-change-this-in-production';
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_ACCESS_SECRET || 'your-super-secret-access-token-key-change-this-in-production',
-      audience: process.env.JWT_AUDIENCE || 'reeltask',
+      secretOrKey,
+      algorithms,
+      audience: configService.get<string>('JWT_AUDIENCE') || 'reeltask',
     });
   }
 

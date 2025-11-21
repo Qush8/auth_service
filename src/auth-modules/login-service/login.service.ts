@@ -4,6 +4,9 @@ import { Repository } from "typeorm";
 import { User } from "src/entities/user.entity";
 import { JwtAuthService, JwtPayload } from "src/auth/services/jwt.service";
 import * as bcrypt from 'bcrypt';
+import { AuditService } from "src/auth/services/audit.service";
+import { InjectMetric } from "@willsoto/nestjs-prometheus";
+import { Counter, Histogram } from "prom-client";
 
 export interface LoginResponse {
     accessToken: string;
@@ -18,20 +21,35 @@ export class LoginService {
         @InjectRepository(User)
         private readonly userRepository: Repository<User>,
         private readonly jwtAuthService: JwtAuthService,
+        private readonly auditService: AuditService,
+        @InjectMetric('auth_login_attempts_total')
+        private readonly loginCounter: Counter<string>,
+        @InjectMetric('auth_login_duration_seconds')
+        private readonly loginHistogram: Histogram<string>,
     ) {}
 
-    async login(email: string, password: string): Promise<LoginResponse> {
+    async login(email: string, password: string, ip?: string, userAgent?: string): Promise<LoginResponse> {
+        // Start timing for latency histogram
+        const startTime = Date.now();
+        let outcome = 'SUCCESS';
+
+        try {
         const user = await this.userRepository.findOne({
             where: { email },
         });
 
         if (!user) {
+            await this.auditService.log(null, 'USER_LOGIN', 'FAILURE', ip || '', userAgent || '', { email, reason: 'User not found' });
+            this.loginCounter.inc({ outcome: 'FAILURE', reason: 'User not found' });
             throw new UnauthorizedException('Invalid email or password');
         }
 
-        const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+        const pepper = process.env.PASSWORD_PEPPER || '';
+        const isPasswordValid = await bcrypt.compare(password + pepper, user.password_hash);
 
         if (!isPasswordValid) {
+            await this.auditService.log(user.auth_id, 'USER_LOGIN', 'FAILURE', ip || '', userAgent || '', { email, reason: 'Invalid password' });
+            this.loginCounter.inc({ outcome: 'FAILURE', reason: 'Invalid password' });
             throw new UnauthorizedException('Invalid email or password');
         }
 
@@ -55,6 +73,12 @@ export class LoginService {
         await this.userRepository.save(user);
 
         console.info('login_success', { user_id: user.auth_id, email: user.email });
+            await this.auditService.log(user.auth_id, 'USER_LOGIN', 'SUCCESS', ip || '', userAgent || '', { email: user.email });
+        this.loginCounter.inc({ outcome: 'SUCCESS', reason: 'OK' });
+
+            // Record latency histogram
+            const duration = (Date.now() - startTime) / 1000; // Convert to seconds
+            this.loginHistogram.observe({ outcome }, duration);
 
         return {
             accessToken,
@@ -62,6 +86,13 @@ export class LoginService {
             isActive: user.isActive,
             message: 'login successfully',
         };
+        } catch (error) {
+            // Record latency histogram for failures
+            outcome = 'FAILURE';
+            const duration = (Date.now() - startTime) / 1000;
+            this.loginHistogram.observe({ outcome }, duration);
+            throw error;
+        }
     }
 
     async refreshToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
