@@ -21,6 +21,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: process.env.JWT_ACCESS_SECRET || 'your-super-secret-access-token-key-change-this-in-production',
+      audience: process.env.JWT_AUDIENCE || 'reeltask',
     });
   }
 

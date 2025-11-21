@@ -54,6 +54,8 @@ export class LoginService {
         user.last_login = new Date();
         await this.userRepository.save(user);
 
+        console.info('login_success', { user_id: user.auth_id, email: user.email });
+
         return {
             accessToken,
             refreshToken,
@@ -107,6 +109,8 @@ export class LoginService {
         const hashedNewRefreshToken = await this.jwtAuthService.hashRefreshToken(newRefreshToken);
         user.hashedRefreshToken = hashedNewRefreshToken;
         await this.userRepository.save(user);
+
+        console.info('refresh_success', { user_id: user.auth_id, email: user.email });
 
         return {
             accessToken: newAccessToken,

@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Headers, HttpCode, HttpStatus, Post } from "@nestjs/common";
 import { IsEmail, IsNotEmpty, Length, Matches, MinLength } from "class-validator";
 import { RegistrationService } from "./regsitration.service";
 
@@ -31,14 +31,26 @@ export class RegistrationController {
 
     @Post('register')
     @HttpCode(HttpStatus.CREATED)
-    async registration(@Body() registerDto: RegisterDto) {
+    async registration(
+        @Body() registerDto: RegisterDto,
+        @Headers('idempotency-key') idempotencyKey?: string,
+    ) {
+        if (!idempotencyKey) {
+            throw new BadRequestException('Idempotency-Key header is required');
+        }
+
+        console.info('user_registration_attempt', { email: registerDto.email });
+
         const result = await this.registrationService.register(
             registerDto.email,
             registerDto.password,
             registerDto.username,
             registerDto.firstName,
             registerDto.lastName,
+            idempotencyKey,
         );
+
+        console.info('user_registered', { user_id: result.user.auth_id, email: result.user.email });
 
         return {
             user_id: result.user.auth_id,

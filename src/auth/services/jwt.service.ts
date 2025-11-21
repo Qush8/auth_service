@@ -19,6 +19,7 @@ export class JwtAuthService {
     return this.jwtService.signAsync(payload, {
       secret: process.env.JWT_ACCESS_SECRET || 'your-super-secret-access-token-key-change-this-in-production',
       expiresIn: '15m',
+      audience: process.env.JWT_AUDIENCE || 'reeltask',
     });
   }
 

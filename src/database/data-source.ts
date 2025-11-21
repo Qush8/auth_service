@@ -1,6 +1,7 @@
 // src/database/data-source.ts
 import { DataSource } from 'typeorm';
 import { User } from '../entities/user.entity';
+import { IdempotencyKey } from '../entities/idempotency-key.entity';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -9,7 +10,7 @@ export const AppDataSource = new DataSource({
   username: 'postgres',
   password: 'postgres',
   database: 'auth_service',
-  entities: [User],
+  entities: [User, IdempotencyKey],
   migrations: ['src/migrations/**/*.ts'],
   synchronize: false, // Must be false
 });

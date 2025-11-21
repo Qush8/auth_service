@@ -4,6 +4,7 @@ import { Repository } from "typeorm";
 import { User } from "src/entities/user.entity";
 import * as bcrypt from "bcrypt";
 import { JwtAuthService, JwtPayload } from "src/auth/services/jwt.service";
+import { IdempotencyKey } from "src/entities/idempotency-key.entity";
 
 interface RegistrationResult {
     user: User;
@@ -20,6 +21,8 @@ export class  RegistrationService {
     constructor(
         @InjectRepository(User)
         private readonly userRepository: Repository<User>,
+        @InjectRepository(IdempotencyKey)
+        private readonly idempotencyKeyRepository: Repository<IdempotencyKey>,
         private readonly jwtAuthService: JwtAuthService,
     ) {}
 
@@ -29,9 +32,33 @@ export class  RegistrationService {
         username: string,
         firstName: string,
         lastName: string,
+        idempotencyKey?: string,
     ): Promise<RegistrationResult> {
         // normalize email
         const normalizedEmail = email.trim().toLowerCase();
+
+        // Idempotency check (if key is provided)
+        if (idempotencyKey) {
+            const existingKey = await this.idempotencyKeyRepository.findOne({
+                where: { email: normalizedEmail, key: idempotencyKey },
+            });
+
+            if (existingKey && existingKey.userId && existingKey.responseToken) {
+                const existingUser = await this.userRepository.findOne({
+                    where: { auth_id: existingKey.userId },
+                });
+
+                if (existingUser) {
+                    const expiresIn = 15 * 60;
+
+                    return {
+                        user: existingUser,
+                        accessToken: existingKey.responseToken,
+                        expiresIn,
+                    };
+                }
+            }
+        }
 
         const existingUserByEmail = await this.userRepository.findOne({
             where: { email: normalizedEmail },
@@ -80,6 +107,17 @@ export class  RegistrationService {
         const accessToken = await this.jwtAuthService.generateAccessToken(payload);
 
         const expiresIn = 15 * 60; 
+
+        // Store idempotency record if key is provided
+        if (idempotencyKey) {
+            const keyRecord = this.idempotencyKeyRepository.create({
+                email: normalizedEmail,
+                key: idempotencyKey,
+                userId: savedUser.auth_id,
+                responseToken: accessToken,
+            });
+            await this.idempotencyKeyRepository.save(keyRecord);
+        }
 
         return {
             user: savedUser,
