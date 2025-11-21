@@ -1,13 +1,23 @@
-import { Body, Controller, Post } from "@nestjs/common";
-import { IsEmail, IsNotEmpty } from "class-validator";
+import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import { IsEmail, IsNotEmpty, Length, Matches, MinLength } from "class-validator";
 import { RegistrationService } from "./regsitration.service";
 
 export class RegisterDto {
     @IsEmail()
     email: string;
     @IsNotEmpty()
+    @MinLength(12, { message: "Password must be at least 12 characters long" })
+    @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\\da-zA-Z]).{12,}$/, {
+        message:
+            "Password must contain upper, lower, number and special character",
+    })
     password: string;
+
     @IsNotEmpty()
+    @Length(3, 30, { message: "Username must be between 3 and 30 characters" })
+    @Matches(/^[a-zA-Z0-9_-]+$/, {
+        message: "Username can contain letters, numbers, underscores and dashes",
+    })
     username: string;
     @IsNotEmpty()
     firstName: string;
@@ -19,23 +29,21 @@ export class RegisterDto {
 export class RegistrationController {
     constructor(private readonly registrationService: RegistrationService) {}
 
-    @Post('registration')
-    async registration(@Body()registerDto: RegisterDto){
-       let result = await this.registrationService.register(
-           registerDto.email,
-           registerDto.password,
-           registerDto.username,
-           registerDto.firstName,
-           registerDto.lastName,
-       )
+    @Post('register')
+    @HttpCode(HttpStatus.CREATED)
+    async registration(@Body() registerDto: RegisterDto) {
+        const result = await this.registrationService.register(
+            registerDto.email,
+            registerDto.password,
+            registerDto.username,
+            registerDto.firstName,
+            registerDto.lastName,
+        );
 
-       if (result == ""){
         return {
-            "message":"user registration was success"
-        }
-       }
-       return {
-        "message": result , 
-       }
+            user_id: result.user.auth_id,
+            token: result.accessToken,
+            expires_in: result.expiresIn,
+        };
     }
 }

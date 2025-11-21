@@ -22,7 +22,7 @@ export class LoginControllerController {
    
     @Post('/login')
     async login(@Body() body: LoginDto) {
-        console.log('login request:', body);
+        console.log('login request:', { email: body.email });
         return await this.loginService.login(body.email, body.password);
     }
 
